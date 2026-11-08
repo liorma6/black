@@ -1,0 +1,43 @@
+name: Verify stdin configuration documentation
+
+on:
+  push:
+    branches: [ci/verify-stdin-config]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: baseline
+            ref: b4f1fcae48826790b6f93ca9226d20003bce0eaa
+          - version: documentation-change
+            ref: 762eb8b4d483ebaad3d5489d707f63c6034b22d6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: "3.14"
+      - name: Fetch upstream version tags
+        run: git fetch --tags https://github.com/psf/black.git
+      - name: Install development and documentation dependencies
+        run: python -m pip install -e ".[d]" --group dev --group docs
+      - name: Check all pre-commit hooks
+        run: pre-commit run --all-files
+      - name: Run unit tests and self-format check
+        run: tox -e run_self,py314 -- -n 2
+      - name: Build documentation with warnings as errors
+        run: sphinx-build -a -b html -W --keep-going docs/ docs/_build/
+      - name: Check for unintended modifications
+        run: git diff --exit-code
